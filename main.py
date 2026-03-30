@@ -181,13 +181,21 @@ def stock():
     today = date.today()
 
     # quantity > 0 の商品を型番+素材+色でグループ化
+    # シリアルありの商品はタイトルで重複排除（同一シリアル=同一物理商品）
     groups = {}
+    seen_titles = set()
     for item in inventories_raw:
         raw_qty = item.get("quantity", 0)
         qty = float(raw_qty) if raw_qty is not None else 0.0
         if qty <= 0:
             continue
         parsed = parse_product_code(item["title"])
+
+        if parsed["serial"] is not None:
+            if item["title"] in seen_titles:
+                continue
+            seen_titles.add(item["title"])
+
         key = f"{parsed['model']}-{parsed['material_code']}{parsed['color_code']}"
         cats = item.get("categories", [])
         created_str = item.get("created_at", "")
