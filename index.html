@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You & I 販売先在庫</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; background: #f5f5f5; color: #333; }
+    .header { background: #2c3e50; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .container { max-width: 1200px; margin: 32px auto; padding: 0 24px; }
+    .card { background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 24px; }
+    .btn { background: #2980b9; color: white; border: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; cursor: pointer; font-family: inherit; transition: background 0.2s; }
+    .btn:hover { background: #2471a3; }
+    .btn:disabled { background: #95a5a6; cursor: not-allowed; }
+    .status { margin-top: 16px; font-size: 14px; color: #666; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #ccc; border-top-color: #2980b9; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat { background: #eaf4fb; border-radius: 6px; padding: 16px; text-align: center; }
+    .stat-num { font-size: 28px; font-weight: 700; color: #2980b9; }
+    .stat-label { font-size: 13px; color: #666; margin-top: 4px; }
+    .filter-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-bar input, .filter-bar select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; }
+    .filter-bar input { flex: 1; min-width: 200px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { background: #f0f0f0; padding: 10px 12px; text-align: left; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
+    th:hover { background: #e4e4e4; }
+    td { padding: 9px 12px; border-bottom: 1px solid #f0f0f0; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+    .customer-section { margin-bottom: 4px; }
+    .customer-header { background: #2c3e50; color: white; padding: 10px 16px; border-radius: 6px 6px 0 0; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .customer-header:hover { background: #34495e; }
+    .customer-body { border: 1px solid #ddd; border-top: none; border-radius: 0 0 6px 6px; overflow: hidden; margin-bottom: 16px; }
+    .badge { background: #f39c12; color: white; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; }
+    .hidden { display: none; }
+    .tag { display: inline-block; background: #ecf0f1; border-radius: 4px; padding: 1px 7px; font-size: 12px; color: #555; }
+    .tag-ys { background: #d6eaf8; color: #1a5276; }
+    .tag-yb { background: #d5f5e3; color: #1a5e38; }
+    #results { display: none; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>You & I 販売先在庫</h1>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <p style="margin-bottom:16px; color:#555; font-size:14px;">Zaico APIから全出庫データを取得し、現在各出庫先にある商品を集計します。取得には1〜2分かかります。</p>
+      <div class="status" id="statusMsg"></div>
+    </div>
+
+    <div id="results">
+      <div class="summary-grid">
+        <div class="stat">
+          <div class="stat-num" id="statTotal">-</div>
+          <div class="stat-label">出庫先にある商品総数</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num" id="statCustomers">-</div>
+          <div class="stat-label">出庫先数</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="filter-bar">
+          <input type="text" id="searchInput" placeholder="商品コード・出庫先で検索..." oninput="applyFilter()">
+          <select id="typeFilter" onchange="applyFilter()">
+            <option value="">すべてのカテゴリ</option>
+            <option value="YS">YS 財布</option>
+            <option value="YB">YB バッグ</option>
+          </select>
+          <select id="sortSelect" onchange="applyFilter()">
+            <option value="count-desc">件数 多い順</option>
+            <option value="count-asc">件数 少ない順</option>
+            <option value="name-asc">出庫先名 昇順</option>
+          </select>
+        </div>
+        <div id="customerList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allData = null;
+
+    window.addEventListener('DOMContentLoaded', startAnalyze);
+
+    async function startAnalyze() {
+      const status = document.getElementById('statusMsg');
+      status.innerHTML = '<span class="spinner"></span>データ取得中... (1〜2分かかります)';
+      document.getElementById('results').style.display = 'none';
+
+      try {
+        const res = await fetch('/api/analyze', { method: 'POST' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allData = await res.json();
+        status.innerHTML = `✅ 完了（出庫先にある商品: ${allData.total.toLocaleString()}件 / ${allData.customer_count}社）`;
+        renderResults();
+      } catch (e) {
+        status.innerHTML = `❌ エラー: ${e.message}`;
+      }
+    }
+
+    function renderResults() {
+      document.getElementById('statTotal').textContent = allData.total.toLocaleString();
+      document.getElementById('statCustomers').textContent = allData.customer_count.toLocaleString();
+      document.getElementById('results').style.display = 'block';
+      applyFilter();
+    }
+
+    function applyFilter() {
+      if (!allData) return;
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const type = document.getElementById('typeFilter').value;
+      const sort = document.getElementById('sortSelect').value;
+
+      let summary = allData.summary.map(c => {
+        let items = c.items;
+        if (search) {
+          items = items.filter(i =>
+            i.title.toLowerCase().includes(search) ||
+            i.customer.toLowerCase().includes(search)
+          );
+        }
+        if (type) {
+          items = items.filter(i => i.title.startsWith(type));
+        }
+        return { ...c, items, count: items.length };
+      }).filter(c => c.count > 0);
+
+      if (sort === 'count-desc') summary.sort((a, b) => b.count - a.count);
+      else if (sort === 'count-asc') summary.sort((a, b) => a.count - b.count);
+      else if (sort === 'name-asc') summary.sort((a, b) => a.customer.localeCompare(b.customer, 'ja'));
+
+      const list = document.getElementById('customerList');
+      if (summary.length === 0) {
+        list.innerHTML = '<p style="color:#999; padding:16px;">該当なし</p>';
+        return;
+      }
+
+      list.innerHTML = summary.map((c, i) => `
+        <div class="customer-section">
+          <div class="customer-header" onclick="toggleSection(${i})">
+            <span>${c.customer}</span>
+            <span class="badge">${c.count}点</span>
+          </div>
+          <div class="customer-body hidden" id="section-${i}">
+            <table>
+              <thead>
+                <tr>
+                  <th>商品コード</th>
+                  <th>型番</th>
+                  <th>素材</th>
+                  <th>色</th>
+                  <th>カテゴリ</th>
+                  <th>出庫日</th>
+                  <th>伝票No.</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${c.items.map(item => `
+                  <tr>
+                    <td><code>${item.title}</code></td>
+                    <td>${item.model || '-'}</td>
+                    <td>${item.material_code || '-'}</td>
+                    <td>${item.color_code || '-'}</td>
+                    <td><span class="tag ${item.category_type.startsWith('YS') ? 'tag-ys' : item.category_type.startsWith('YB') ? 'tag-yb' : ''}">${item.category_type || '-'}</span></td>
+                    <td>${item.shipped_date || '-'}</td>
+                    <td>${item.slip_num || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleSection(i) {
+      const el = document.getElementById(`section-${i}`);
+      el.classList.toggle('hidden');
+    }
+  </script>
+</body>
+</html>
