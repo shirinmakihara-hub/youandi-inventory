@@ -3,17 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>You & I 販売先在庫</title>
+  <title>You & I 在庫管理</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; background: #f5f5f5; color: #333; }
-    .header { background: #2c3e50; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 16px; }
+    .header { background: #2c3e50; color: white; padding: 20px 32px; }
     .header h1 { font-size: 20px; font-weight: 600; }
+    .tabs { background: #233140; display: flex; padding: 0 32px; }
+    .tab { color: #aab8c2; padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: 500; border-bottom: 3px solid transparent; transition: all 0.2s; }
+    .tab:hover { color: white; }
+    .tab.active { color: white; border-bottom-color: #3498db; }
     .container { max-width: 1200px; margin: 32px auto; padding: 0 24px; }
     .card { background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 24px; }
     .btn { background: #2980b9; color: white; border: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; cursor: pointer; font-family: inherit; transition: background 0.2s; }
     .btn:hover { background: #2471a3; }
-    .btn:disabled { background: #95a5a6; cursor: not-allowed; }
     .status { margin-top: 16px; font-size: 14px; color: #666; }
     .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #ccc; border-top-color: #2980b9; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -25,8 +28,7 @@
     .filter-bar input, .filter-bar select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; }
     .filter-bar input { flex: 1; min-width: 200px; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th { background: #f0f0f0; padding: 10px 12px; text-align: left; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
-    th:hover { background: #e4e4e4; }
+    th { background: #f0f0f0; padding: 10px 12px; text-align: left; font-weight: 600; user-select: none; white-space: nowrap; }
     td { padding: 9px 12px; border-bottom: 1px solid #f0f0f0; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #fafafa; }
@@ -35,83 +37,153 @@
     .customer-header:hover { background: #34495e; }
     .customer-body { border: 1px solid #ddd; border-top: none; border-radius: 0 0 6px 6px; overflow: hidden; margin-bottom: 16px; }
     .badge { background: #f39c12; color: white; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; }
+    .badge-count { background: #e74c3c; color: white; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; }
     .hidden { display: none; }
     .tag { display: inline-block; background: #ecf0f1; border-radius: 4px; padding: 1px 7px; font-size: 12px; color: #555; }
     .tag-ys { background: #d6eaf8; color: #1a5276; }
     .tag-yb { background: #d5f5e3; color: #1a5e38; }
-    #results { display: none; }
+    .age-warn { color: #e67e22; font-weight: 600; }
+    .age-alert { color: #e74c3c; font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div>
-      <h1>You & I 販売先在庫</h1>
+    <h1>You & I 在庫管理</h1>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('sales')">販売先在庫</div>
+    <div class="tab" onclick="switchTab('stock')">社内在庫</div>
+  </div>
+
+  <!-- 販売先在庫タブ -->
+  <div class="tab-content active" id="tab-sales">
+    <div class="container">
+      <div class="card">
+        <p style="margin-bottom:16px; color:#555; font-size:14px;">出庫済みで販売先に残っている商品を集計します。</p>
+        <div class="status" id="salesStatus"></div>
+      </div>
+      <div id="salesResults" style="display:none">
+        <div class="summary-grid">
+          <div class="stat">
+            <div class="stat-num" id="statTotal">-</div>
+            <div class="stat-label">販売先にある商品総数</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="statCustomers">-</div>
+            <div class="stat-label">販売先数</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="filter-bar">
+            <input type="text" id="searchInput" placeholder="商品コード・販売先で検索..." oninput="applyFilter()">
+            <select id="typeFilter" onchange="applyFilter()">
+              <option value="">すべてのカテゴリ</option>
+              <option value="YS">YS 財布</option>
+              <option value="YB">YB バッグ</option>
+            </select>
+            <select id="sortSelect" onchange="applyFilter()">
+              <option value="count-desc">件数 多い順</option>
+              <option value="count-asc">件数 少ない順</option>
+              <option value="name-asc">販売先名 昇順</option>
+            </select>
+          </div>
+          <div id="customerList"></div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="container">
-    <div class="card">
-      <p style="margin-bottom:16px; color:#555; font-size:14px;">Zaico APIから全出庫データを取得し、現在各出庫先にある商品を集計します。取得には1〜2分かかります。</p>
-      <div class="status" id="statusMsg"></div>
-    </div>
-
-    <div id="results">
-      <div class="summary-grid">
-        <div class="stat">
-          <div class="stat-num" id="statTotal">-</div>
-          <div class="stat-label">出庫先にある商品総数</div>
-        </div>
-        <div class="stat">
-          <div class="stat-num" id="statCustomers">-</div>
-          <div class="stat-label">出庫先数</div>
-        </div>
-      </div>
-
+  <!-- 社内在庫タブ -->
+  <div class="tab-content" id="tab-stock">
+    <div class="container">
       <div class="card">
-        <div class="filter-bar">
-          <input type="text" id="searchInput" placeholder="商品コード・出庫先で検索..." oninput="applyFilter()">
-          <select id="typeFilter" onchange="applyFilter()">
-            <option value="">すべてのカテゴリ</option>
-            <option value="YS">YS 財布</option>
-            <option value="YB">YB バッグ</option>
-          </select>
-          <select id="sortSelect" onchange="applyFilter()">
-            <option value="count-desc">件数 多い順</option>
-            <option value="count-asc">件数 少ない順</option>
-            <option value="name-asc">出庫先名 昇順</option>
-          </select>
+        <p style="margin-bottom:16px; color:#555; font-size:14px;">社内在庫のうち同一商品が3個以上あるものをダブつき順に表示します。</p>
+        <div class="status" id="stockStatus"></div>
+      </div>
+      <div id="stockResults" style="display:none">
+        <div class="summary-grid">
+          <div class="stat">
+            <div class="stat-num" id="statStockGroups">-</div>
+            <div class="stat-label">ダブつき商品（種類）</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="statStockUnits">-</div>
+            <div class="stat-label">合計個数</div>
+          </div>
         </div>
-        <div id="customerList"></div>
+        <div class="card">
+          <div class="filter-bar">
+            <input type="text" id="stockSearch" placeholder="商品コードで検索..." oninput="applyStockFilter()">
+            <select id="stockTypeFilter" onchange="applyStockFilter()">
+              <option value="">すべてのカテゴリ</option>
+              <option value="YS">YS 財布</option>
+              <option value="YB">YB バッグ</option>
+            </select>
+            <select id="stockMonthFilter" onchange="applyStockFilter()">
+              <option value="0">すべての在庫期間</option>
+              <option value="3">3ヶ月以上</option>
+              <option value="6">6ヶ月以上</option>
+              <option value="12">12ヶ月以上</option>
+            </select>
+          </div>
+          <table id="stockTable">
+            <thead>
+              <tr>
+                <th>商品コード</th>
+                <th>カテゴリ</th>
+                <th>型番</th>
+                <th>素材</th>
+                <th>色</th>
+                <th>個数</th>
+                <th>最古在庫日</th>
+                <th>在庫期間</th>
+              </tr>
+            </thead>
+            <tbody id="stockBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
     let allData = null;
+    let stockData = null;
+    let salesLoaded = false;
+    let stockLoaded = false;
 
-    window.addEventListener('DOMContentLoaded', startAnalyze);
+    window.addEventListener('DOMContentLoaded', () => switchTab('sales'));
 
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach((t, i) => {
+        t.classList.toggle('active', (i === 0 && tab === 'sales') || (i === 1 && tab === 'stock'));
+      });
+      document.getElementById('tab-sales').classList.toggle('active', tab === 'sales');
+      document.getElementById('tab-stock').classList.toggle('active', tab === 'stock');
+
+      if (tab === 'sales' && !salesLoaded) { salesLoaded = true; startAnalyze(); }
+      if (tab === 'stock' && !stockLoaded) { stockLoaded = true; startStock(); }
+    }
+
+    // ── 販売先在庫 ──
     async function startAnalyze() {
-      const status = document.getElementById('statusMsg');
+      const status = document.getElementById('salesStatus');
       status.innerHTML = '<span class="spinner"></span>データ取得中... (1〜2分かかります)';
-      document.getElementById('results').style.display = 'none';
-
+      document.getElementById('salesResults').style.display = 'none';
       try {
         const res = await fetch('/api/analyze', { method: 'POST' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         allData = await res.json();
-        status.innerHTML = `✅ 完了（出庫先にある商品: ${allData.total.toLocaleString()}件 / ${allData.customer_count}社）`;
-        renderResults();
+        status.innerHTML = `✅ 完了（${allData.total.toLocaleString()}件 / ${allData.customer_count}社）`;
+        document.getElementById('statTotal').textContent = allData.total.toLocaleString();
+        document.getElementById('statCustomers').textContent = allData.customer_count.toLocaleString();
+        document.getElementById('salesResults').style.display = 'block';
+        applyFilter();
       } catch (e) {
         status.innerHTML = `❌ エラー: ${e.message}`;
       }
-    }
-
-    function renderResults() {
-      document.getElementById('statTotal').textContent = allData.total.toLocaleString();
-      document.getElementById('statCustomers').textContent = allData.customer_count.toLocaleString();
-      document.getElementById('results').style.display = 'block';
-      applyFilter();
     }
 
     function applyFilter() {
@@ -122,15 +194,8 @@
 
       let summary = allData.summary.map(c => {
         let items = c.items;
-        if (search) {
-          items = items.filter(i =>
-            i.title.toLowerCase().includes(search) ||
-            i.customer.toLowerCase().includes(search)
-          );
-        }
-        if (type) {
-          items = items.filter(i => i.title.startsWith(type));
-        }
+        if (search) items = items.filter(i => i.title.toLowerCase().includes(search) || i.customer.toLowerCase().includes(search));
+        if (type) items = items.filter(i => i.title.startsWith(type));
         return { ...c, items, count: items.length };
       }).filter(c => c.count > 0);
 
@@ -139,10 +204,7 @@
       else if (sort === 'name-asc') summary.sort((a, b) => a.customer.localeCompare(b.customer, 'ja'));
 
       const list = document.getElementById('customerList');
-      if (summary.length === 0) {
-        list.innerHTML = '<p style="color:#999; padding:16px;">該当なし</p>';
-        return;
-      }
+      if (summary.length === 0) { list.innerHTML = '<p style="color:#999;padding:16px;">該当なし</p>'; return; }
 
       list.innerHTML = summary.map((c, i) => `
         <div class="customer-section">
@@ -152,17 +214,7 @@
           </div>
           <div class="customer-body hidden" id="section-${i}">
             <table>
-              <thead>
-                <tr>
-                  <th>商品コード</th>
-                  <th>型番</th>
-                  <th>素材</th>
-                  <th>色</th>
-                  <th>カテゴリ</th>
-                  <th>出庫日</th>
-                  <th>伝票No.</th>
-                </tr>
-              </thead>
+              <thead><tr><th>商品コード</th><th>型番</th><th>素材</th><th>色</th><th>カテゴリ</th><th>出庫日</th><th>伝票No.</th></tr></thead>
               <tbody>
                 ${c.items.map(item => `
                   <tr>
@@ -170,21 +222,70 @@
                     <td>${item.model || '-'}</td>
                     <td>${item.material_code || '-'}</td>
                     <td>${item.color_code || '-'}</td>
-                    <td><span class="tag ${item.category_type.startsWith('YS') ? 'tag-ys' : item.category_type.startsWith('YB') ? 'tag-yb' : ''}">${item.category_type || '-'}</span></td>
+                    <td><span class="tag ${item.category_type.startsWith('YS') ? 'tag-ys' : 'tag-yb'}">${item.category_type || '-'}</span></td>
                     <td>${item.shipped_date || '-'}</td>
                     <td>${item.slip_num || '-'}</td>
-                  </tr>
-                `).join('')}
+                  </tr>`).join('')}
               </tbody>
             </table>
           </div>
-        </div>
-      `).join('');
+        </div>`).join('');
     }
 
     function toggleSection(i) {
-      const el = document.getElementById(`section-${i}`);
-      el.classList.toggle('hidden');
+      document.getElementById(`section-${i}`).classList.toggle('hidden');
+    }
+
+    // ── 社内在庫 ──
+    async function startStock() {
+      const status = document.getElementById('stockStatus');
+      status.innerHTML = '<span class="spinner"></span>データ取得中... (1〜2分かかります)';
+      document.getElementById('stockResults').style.display = 'none';
+      try {
+        const res = await fetch('/api/stock', { method: 'POST' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        stockData = await res.json();
+        status.innerHTML = `✅ 完了（ダブつき ${stockData.total_groups.toLocaleString()}種類 / ${stockData.total_units.toLocaleString()}点）`;
+        document.getElementById('statStockGroups').textContent = stockData.total_groups.toLocaleString();
+        document.getElementById('statStockUnits').textContent = stockData.total_units.toLocaleString();
+        document.getElementById('stockResults').style.display = 'block';
+        applyStockFilter();
+      } catch (e) {
+        status.innerHTML = `❌ エラー: ${e.message}`;
+      }
+    }
+
+    function applyStockFilter() {
+      if (!stockData) return;
+      const search = document.getElementById('stockSearch').value.toLowerCase();
+      const type = document.getElementById('stockTypeFilter').value;
+      const minMonths = parseInt(document.getElementById('stockMonthFilter').value);
+
+      let items = stockData.items;
+      if (search) items = items.filter(i => i.key.toLowerCase().includes(search));
+      if (type) items = items.filter(i => i.key.startsWith(type));
+      if (minMonths > 0) items = items.filter(i => i.months_in_stock >= minMonths);
+
+      const body = document.getElementById('stockBody');
+      if (items.length === 0) {
+        body.innerHTML = '<tr><td colspan="8" style="color:#999;padding:16px;">該当なし</td></tr>';
+        return;
+      }
+
+      body.innerHTML = items.map(item => {
+        const ageClass = item.months_in_stock >= 12 ? 'age-alert' : item.months_in_stock >= 6 ? 'age-warn' : '';
+        const catClass = item.category_type.startsWith('YS') ? 'tag-ys' : 'tag-yb';
+        return `<tr>
+          <td><code>${item.key}</code></td>
+          <td><span class="tag ${catClass}">${item.category_type || '-'}</span></td>
+          <td>${item.model || '-'}</td>
+          <td>${item.material_code || '-'}</td>
+          <td>${item.color_code || '-'}</td>
+          <td><span class="badge-count">${item.count}個</span></td>
+          <td>${item.oldest_date}</td>
+          <td class="${ageClass}">${item.months_in_stock}ヶ月</td>
+        </tr>`;
+      }).join('');
     }
   </script>
 </body>

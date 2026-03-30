@@ -159,6 +159,87 @@ def analyze():
     })
 
 
+@app.post("/api/stock")
+def stock():
+    from datetime import date, datetime
+
+    print("inventories取得中（社内在庫）...")
+    inventories_raw = []
+    page = 1
+    while True:
+        url = f"{ZAICO_BASE}/inventories?per_page=1000&page={page}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {ZAICO_TOKEN}"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.loads(r.read())
+        if not data:
+            break
+        inventories_raw.extend(data)
+        if len(data) < 1000:
+            break
+        page += 1
+
+    today = date.today()
+
+    # quantity > 0 の商品を型番+素材+色でグループ化
+    groups = {}
+    for item in inventories_raw:
+        raw_qty = item.get("quantity", 0)
+        qty = float(raw_qty) if raw_qty is not None else 0.0
+        if qty <= 0:
+            continue
+        parsed = parse_product_code(item["title"])
+        key = f"{parsed['model']}-{parsed['material_code']}{parsed['color_code']}"
+        cats = item.get("categories", [])
+        created_str = item.get("created_at", "")
+        try:
+            created = datetime.fromisoformat(created_str).date()
+        except Exception:
+            created = today
+
+        if key not in groups:
+            groups[key] = {
+                "key": key,
+                "model": parsed["model"],
+                "material_code": parsed["material_code"],
+                "color_code": parsed["color_code"],
+                "category_type": cats[0] if cats else "",
+                "count": 0,
+                "oldest_date": created,
+                "items": [],
+            }
+        groups[key]["count"] += qty
+        groups[key]["items"].append(item["title"])
+        if created < groups[key]["oldest_date"]:
+            groups[key]["oldest_date"] = created
+
+    # 3個以上のみ・件数順ソート
+    result = []
+    for g in groups.values():
+        if g["count"] < 3:
+            continue
+        delta = today - g["oldest_date"]
+        months = delta.days // 30
+        result.append({
+            "key": g["key"],
+            "model": g["model"],
+            "material_code": g["material_code"],
+            "color_code": g["color_code"],
+            "category_type": g["category_type"],
+            "count": int(g["count"]),
+            "oldest_date": g["oldest_date"].isoformat(),
+            "months_in_stock": months,
+            "items": g["items"],
+        })
+
+    result.sort(key=lambda x: -x["count"])
+
+    return JSONResponse({
+        "total_groups": len(result),
+        "total_units": sum(r["count"] for r in result),
+        "items": result,
+    })
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     here = os.path.dirname(os.path.abspath(__file__))
