@@ -49,6 +49,9 @@
     .serial-row td { background: #f8fbfd; padding: 8px 12px 8px 24px; }
     .serial-list { display: flex; flex-wrap: wrap; gap: 6px; }
     .serial-tag { background: #dce8f0; color: #2c3e50; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-family: monospace; }
+    .serial-detail { display: flex; gap: 16px; align-items: flex-start; }
+    .serial-detail img { width: 120px; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; flex-shrink: 0; }
+    .serial-detail img.no-image { display: none; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
   </style>
@@ -284,10 +287,10 @@
       body.innerHTML = items.map((item, i) => {
         const ageClass = item.months_in_stock >= 12 ? 'age-alert' : item.months_in_stock >= 6 ? 'age-warn' : '';
         const catClass = item.category_type.startsWith('YS') ? 'tag-ys' : 'tag-yb';
-        const serials = item.items.filter(t => t !== item.key);
-        const serialHtml = serials.length > 0
-          ? serials.map(t => `<span class="serial-tag">${t}</span>`).join('')
-          : item.items.map(t => `<span class="serial-tag">${t}</span>`).join('');
+        const serialHtml = item.items.map(t => `<span class="serial-tag">${t}</span>`).join('');
+        const imgHtml = item.image_url
+          ? `<img src="${item.image_url}" loading="lazy" alt="${item.key}" onerror="this.classList.add('no-image')">`
+          : '';
         return `
         <tr class="stock-row" onclick="toggleSerial('serial-${i}')">
           <td><code>${item.key}</code> <span style="font-size:11px;color:#999;">▼</span></td>
@@ -300,7 +303,12 @@
           <td class="${ageClass}">${item.months_in_stock}ヶ月</td>
         </tr>
         <tr class="serial-row hidden" id="serial-${i}">
-          <td colspan="8"><div class="serial-list">${serialHtml}</div></td>
+          <td colspan="8">
+            <div class="serial-detail">
+              ${imgHtml}
+              <div class="serial-list">${serialHtml}</div>
+            </div>
+          </td>
         </tr>`;
       }).join('');
     }

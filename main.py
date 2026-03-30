@@ -196,6 +196,8 @@ def stock():
         except Exception:
             created = today
 
+        image_url = (item.get("item_image") or {}).get("url", "")
+
         if key not in groups:
             groups[key] = {
                 "key": key,
@@ -206,11 +208,14 @@ def stock():
                 "count": 0,
                 "oldest_date": created,
                 "items": [],
+                "image_url": image_url,
             }
         groups[key]["count"] += qty
         groups[key]["items"].append(item["title"])
         if created < groups[key]["oldest_date"]:
             groups[key]["oldest_date"] = created
+        if not groups[key]["image_url"] and image_url:
+            groups[key]["image_url"] = image_url
 
     # 3個以上のみ・件数順ソート
     result = []
@@ -229,6 +234,7 @@ def stock():
             "oldest_date": g["oldest_date"].isoformat(),
             "months_in_stock": months,
             "items": g["items"],
+            "image_url": g["image_url"],
         })
 
     result.sort(key=lambda x: -x["count"])
