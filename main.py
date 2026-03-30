@@ -113,7 +113,9 @@ def analyze():
                 }
 
     # 4. quantity=0 かつ packing_slips記録あり かつ 販売済みでない → 出庫先にある商品
+    # シリアルありの商品はタイトルで重複排除（同一シリアル=同一物理商品）
     at_customer = []
+    seen_titles = set()
     for inv_id, slip_info in latest_slip.items():
         inv = inv_map.get(inv_id)
         if inv is None:
@@ -125,6 +127,10 @@ def analyze():
         if inv_id in sold_ids:
             continue  # 販売済み
         parsed = parse_product_code(inv["title"])
+        if parsed["serial"] is not None:
+            if inv["title"] in seen_titles:
+                continue
+            seen_titles.add(inv["title"])
         cats = inv.get("categories", [])
         at_customer.append({
             "inventory_id": inv_id,
