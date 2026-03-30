@@ -161,4 +161,5 @@ def analyze():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return open("/Users/janeyanagi/zaico-app/index.html").read()
+    here = os.path.dirname(os.path.abspath(__file__))
+    return open(os.path.join(here, "index.html")).read()
