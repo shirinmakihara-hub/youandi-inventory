@@ -132,6 +132,7 @@ def analyze():
                 continue
             seen_titles.add(inv["title"])
         cats = inv.get("categories", [])
+        image_url = (inv.get("item_image") or {}).get("url", "")
         at_customer.append({
             "inventory_id": inv_id,
             "title": inv["title"],
@@ -143,6 +144,7 @@ def analyze():
             "customer": slip_info["customer"],
             "shipped_date": slip_info["date"],
             "slip_num": slip_info["slip_num"],
+            "image_url": image_url,
         })
 
     # 6. 出庫先ごとに集計

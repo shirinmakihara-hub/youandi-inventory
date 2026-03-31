@@ -222,10 +222,11 @@
           </div>
           <div class="customer-body hidden" id="section-${i}">
             <table>
-              <thead><tr><th>商品コード</th><th>型番</th><th>素材</th><th>色</th><th>カテゴリ</th><th>出庫日</th><th>伝票No.</th></tr></thead>
+              <thead><tr><th>写真</th><th>商品コード</th><th>型番</th><th>素材</th><th>色</th><th>カテゴリ</th><th>出庫日</th><th>伝票No.</th></tr></thead>
               <tbody>
                 ${c.items.map(item => `
                   <tr>
+                    <td>${item.image_url ? `<img src="${item.image_url}" loading="lazy" alt="${item.title}" style="width:60px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #ddd;" onerror="this.style.display='none'">` : '-'}</td>
                     <td><code>${item.title}</code></td>
                     <td>${item.model || '-'}</td>
                     <td>${item.material_code || '-'}</td>
